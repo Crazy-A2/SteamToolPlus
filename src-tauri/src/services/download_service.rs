@@ -3,6 +3,7 @@
 
 use std::path::Path;
 use tauri::AppHandle;
+use crate::utils::resource_utils::get_resource_dir;
 
 /// 清单文件夹读取结果
 #[derive(Debug, Clone, serde::Serialize)]
@@ -111,26 +112,9 @@ impl DownloadService {
     }
 
     /// 获取资源目录路径
-    fn get_resource_dir(&self, _app: &AppHandle) -> Result<std::path::PathBuf, String> {
-        let exe_dir = std::env::current_exe()
-            .map_err(|e| format!("无法获取程序路径: {}", e))?
-            .parent()
-            .ok_or("无法获取程序所在目录")?
-            .to_path_buf();
-
-        let resources_path = exe_dir.join("resources");
-        if resources_path.exists() && resources_path.is_dir() {
-            return Ok(resources_path);
-        }
-
-        if let Some(target_dir) = exe_dir.parent() {
-            let project_resources = target_dir.parent().unwrap_or(target_dir).join("resources");
-            if project_resources.exists() && project_resources.is_dir() {
-                return Ok(project_resources);
-            }
-        }
-
-        Err("无法找到资源目录".to_string())
+    fn get_resource_dir(&self, app: &AppHandle) -> Result<std::path::PathBuf, String> {
+        // 使用公共的资源目录工具函数
+        get_resource_dir(app)
     }
 }
 
@@ -217,15 +201,11 @@ impl DownloadServiceTrait for DownloadService {
     }
 
     /// 获取游戏的清单文件夹路径
+    /// 始终返回路径（即使目录不存在），让前端决定是否创建
     fn get_manifest_path(&self, app: &AppHandle, game_id: &str) -> Result<String, String> {
         let resource_dir = self.get_resource_dir(app)?;
         let manifest_dir = resource_dir.join("manifest").join(game_id);
-
-        if manifest_dir.exists() && manifest_dir.is_dir() {
-            Ok(manifest_dir.to_string_lossy().to_string())
-        } else {
-            Ok("".to_string())
-        }
+        Ok(manifest_dir.to_string_lossy().to_string())
     }
 
     /// 启动游戏下载
@@ -526,10 +506,13 @@ impl DownloadServiceTrait for DownloadService {
         #[cfg(target_os = "windows")]
         {
             use std::process::Command;
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
 
             // 使用 taskkill 命令终止 ddv20.exe 进程
             let output = Command::new("taskkill")
                 .args(&["/F", "/IM", "ddv20.exe"])
+                .creation_flags(CREATE_NO_WINDOW)
                 .output()
                 .map_err(|e| format!("执行终止进程命令失败: {}", e))?;
 

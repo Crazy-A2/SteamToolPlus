@@ -165,15 +165,7 @@
       </section>
     </div>
 
-    <!-- 游戏详情弹窗 -->
-    <GameDetailModal
-      :visible="showGameDetail"
-      :game-config="selectedGame"
-      @close="showGameDetail = false"
-      @launch="handleLaunchGame"
-      @apply-patch="handleApplyPatch"
-      @select-path="handleSelectGamePath"
-    />
+
   </div>
 </template>
 
@@ -190,7 +182,6 @@ import type { GameConfigData } from '../../types'
 import { loadGamesConfigFromFile } from '../../api/game.api'
 import { PATCH_TYPE_MAP } from '../../types'
 import GameCard from '../../components/game/GameCard.vue'
-import GameDetailModal from '../../components/game/GameDetailModal.vue'
 
 // 路由
 const router = useRouter()
@@ -203,8 +194,6 @@ const loading = ref(false)
 const gamesConfig = ref<GameConfigData[]>([])
 const searchKeyword = ref('')
 const currentPage = ref(1)
-const showGameDetail = ref(false)
-const selectedGame = ref<GameConfigData | null>(null)
 const jumpPageInput = ref<number | null>(null)
 
 // 计算属性：跳转页码是否有效
@@ -373,17 +362,6 @@ function handleJumpToPage() {
   }
 }
 
-function handleLaunchGame(gameId: string) {
-  // 启动游戏功能待实现
-}
-
-function handleApplyPatch(tag: any) {
-  // 应用补丁功能待实现
-}
-
-function handleSelectGamePath(gameId: string) {
-  // 选择游戏路径功能待实现
-}
 </script>
 
 <style scoped>
@@ -581,6 +559,12 @@ function handleSelectGamePath(gameId: string) {
   flex: 1;
   min-height: 0;
   padding-right: 8px;
+  align-content: start;
+}
+
+/* 限制卡片最大高度为160px */
+.games-grid :deep(.game-card) {
+  max-height: 160px;
 }
 
 

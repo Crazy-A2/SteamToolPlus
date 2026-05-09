@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 use regex::Regex;
 use serde_json::json;
 use crate::services::config_service::ConfigServiceTrait;
+use crate::utils::resource_utils::get_resource_dir;
+use tauri::AppHandle;
 
 /// 扫描文件夹中的清单文件
 /// 递归查找.lua、.manifest、.vdf文件，支持嵌套1-2层目录
@@ -344,6 +346,17 @@ pub fn restart_steam() -> Result<serde_json::Value, String> {
     }
 
     // 1. 结束steam.exe进程
+    #[cfg(target_os = "windows")]
+    let kill_output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new("taskkill")
+            .args(&["/F", "/IM", "steam.exe"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    };
+    
+    #[cfg(not(target_os = "windows"))]
     let kill_output = Command::new("taskkill")
         .args(&["/F", "/IM", "steam.exe"])
         .output();
@@ -385,9 +398,11 @@ pub fn restart_steam() -> Result<serde_json::Value, String> {
 /// 检查游戏清单文件是否存在
 /// 用于游戏详情页判断【入库Steam】按钮是否可用
 #[tauri::command]
-pub fn check_game_manifest_exists(game_id: String) -> Result<serde_json::Value, String> {
+pub fn check_game_manifest_exists(app: AppHandle, game_id: String) -> Result<serde_json::Value, String> {
+    // 获取资源目录路径
+    let resource_dir = get_resource_dir(&app)?;
     // 构建manifest目录路径
-    let manifest_dir = Path::new("resources").join("manifest").join(&game_id);
+    let manifest_dir = resource_dir.join("manifest").join(&game_id);
 
     // 检查目录是否存在
     if !manifest_dir.exists() {
@@ -434,15 +449,17 @@ pub fn check_game_manifest_exists(game_id: String) -> Result<serde_json::Value, 
 /// 导入游戏清单到Steam（用于游戏详情页）
 /// 从 resources/manifest/{game_id}/ 读取清单文件并导入
 #[tauri::command]
-pub fn import_game_manifest_to_steam(game_id: String) -> Result<serde_json::Value, String> {
+pub fn import_game_manifest_to_steam(app: AppHandle, game_id: String) -> Result<serde_json::Value, String> {
     // 从配置中读取Steam路径
     let config = crate::services::ConfigService::new();
     let app_config = config.get_config();
     let steam_path = app_config.game_dirs.steam_path
         .ok_or("未配置Steam路径，请前往全局设置配置")?;
 
+    // 获取资源目录路径
+    let resource_dir = get_resource_dir(&app)?;
     // 构建manifest目录路径
-    let manifest_dir = Path::new("resources").join("manifest").join(&game_id);
+    let manifest_dir = resource_dir.join("manifest").join(&game_id);
 
     // 检查目录是否存在
     if !manifest_dir.exists() {

@@ -365,6 +365,17 @@ fn get_game_processes_snapshot(dir_path: &str, exe_name: &str, initial_pid: u32)
     let exe_lower = exe_name.to_lowercase();
     
     // 使用 wmic 获取所有进程的详细信息
+    #[cfg(target_os = "windows")]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new("wmic")
+            .args(&["process", "get", "ProcessId,ExecutablePath,Name", "/format:csv"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    };
+    
+    #[cfg(not(target_os = "windows"))]
     let output = Command::new("wmic")
         .args(&["process", "get", "ProcessId,ExecutablePath,Name", "/format:csv"])
         .output();
@@ -434,6 +445,17 @@ fn check_game_running(
     let exe_lower = exe_name.to_lowercase();
     
     // 使用 tasklist 获取所有进程（比 wmic 更快）
+    #[cfg(target_os = "windows")]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new("tasklist")
+            .args(&["/FO", "CSV", "/NH"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    };
+    
+    #[cfg(not(target_os = "windows"))]
     let output = Command::new("tasklist")
         .args(&["/FO", "CSV", "/NH"])
         .output();
@@ -496,6 +518,17 @@ fn check_game_running(
 fn check_processes_in_directory_wmic(dir_lower: &str) -> bool {
     use std::process::Command;
 
+    #[cfg(target_os = "windows")]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new("wmic")
+            .args(&["process", "get", "ExecutablePath", "/format:csv"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    };
+    
+    #[cfg(not(target_os = "windows"))]
     let output = Command::new("wmic")
         .args(&["process", "get", "ExecutablePath", "/format:csv"])
         .output();
@@ -542,6 +575,17 @@ fn check_game_running_dynamic(
     }
 
     // 使用 wmic 获取所有进程的详细信息（包括可执行路径）
+    #[cfg(target_os = "windows")]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new("wmic")
+            .args(&["process", "get", "ProcessId,ExecutablePath,Name", "/format:csv"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    };
+    
+    #[cfg(not(target_os = "windows"))]
     let output = Command::new("wmic")
         .args(&["process", "get", "ProcessId,ExecutablePath,Name", "/format:csv"])
         .output();
@@ -616,6 +660,17 @@ fn check_game_running_dynamic(
 fn is_process_running(pid: u32) -> bool {
     use std::process::Command;
     
+    #[cfg(target_os = "windows")]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new("tasklist")
+            .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    };
+    
+    #[cfg(not(target_os = "windows"))]
     let output = Command::new("tasklist")
         .args(&["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
         .output();
@@ -637,10 +692,20 @@ pub async fn close_game_process(pid: u32) -> Result<(), String> {
     use std::process::Command;
     
     // 首先尝试使用 /T 参数关闭进程树（包括子进程）
+    #[cfg(target_os = "windows")]
+    let _output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new("taskkill")
+            .args(&["/PID", &pid.to_string(), "/T", "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    };
+    
+    #[cfg(not(target_os = "windows"))]
     let _output = Command::new("taskkill")
         .args(&["/PID", &pid.to_string(), "/T", "/F"])
-        .output()
-        .map_err(|e| format!("执行关闭命令失败: {}", e))?;
+        .output();
     
     // 即使 taskkill 返回错误，也可能部分成功，所以不直接返回错误
     // 而是继续检查进程是否还在运行
@@ -651,9 +716,22 @@ pub async fn close_game_process(pid: u32) -> Result<(), String> {
     // 检查进程是否还在运行
     if is_process_running(pid) {
         // 如果还在运行，尝试再次强制关闭
-        let _ = Command::new("taskkill")
-            .args(&["/PID", &pid.to_string(), "/F"])
-            .output();
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            let _ = Command::new("taskkill")
+                .args(&["/PID", &pid.to_string(), "/F"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
+        }
+        
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = Command::new("taskkill")
+                .args(&["/PID", &pid.to_string(), "/F"])
+                .output();
+        }
         
         // 再次等待
         std::thread::sleep(std::time::Duration::from_millis(500));
@@ -705,6 +783,17 @@ fn is_game_process_running_simple(exe_name: &str) -> bool {
     }
     
     // 使用 tasklist 查找进程
+    #[cfg(target_os = "windows")]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new("tasklist")
+            .args(&["/FO", "CSV", "/NH"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    };
+    
+    #[cfg(not(target_os = "windows"))]
     let output = Command::new("tasklist")
         .args(&["/FO", "CSV", "/NH"])
         .output();

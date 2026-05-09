@@ -17,7 +17,7 @@
         </button>
         <button
           class="manifest-link-btn"
-          @click="openExternalLink('https://pan.xunlei.com/s/VOrkq4Tq0c0Sootmhpp4433yA1?pwd=2tmn#')"
+          @click="openExternalLink('https://pan.xunlei.com/s/VOrmjucdcpCilK1xnElvCI9vA1?pwd=z2gb#')"
         >
           <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -593,6 +593,7 @@ const selectManifestFolder = async () => {
 
 /**
  * 解析清单文件夹
+ * 自动转换格式（Lua -> VDF）
  */
 const parseManifestFolder = async (folderPath: string) => {
   gameName.value = ''
@@ -602,40 +603,56 @@ const parseManifestFolder = async (folderPath: string) => {
   validationError.value = ''
 
   try {
-    const result = await invoke<{
-      jsonFiles: string[]
+    // 首先扫描并转换清单文件格式
+    const scanResult = await invoke<{
+      success: boolean
+      hasVdf: boolean
+      hasLua: boolean
+      hasManifest: boolean
+      converted: boolean
       vdfFiles: string[]
       manifestFiles: string[]
-    }>('read_manifest_folder', { folderPath })
+      message: string
+    }>('scan_and_convert_manifest_for_download', {
+      folderPath
+    })
 
-    if (result.vdfFiles.length === 0) {
-      validationError.value = '未找到 .vdf 配置文件'
-      addLog('验证失败: 未找到 .vdf 文件', 'error')
+    if (!scanResult.success) {
+      validationError.value = scanResult.message
+      addLog(`验证失败: ${scanResult.message}`, 'error')
       return
     }
 
-    vdfFilePath.value = result.vdfFiles[0]
+    if (scanResult.converted) {
+      addLog('已自动将Lua转换为VDF格式', 'success')
+    }
 
-    if (result.manifestFiles.length === 0) {
+    vdfFilePath.value = scanResult.vdfFiles[0] || ''
+
+    if (scanResult.manifestFiles.length === 0) {
       validationError.value = '未找到 .manifest 清单文件'
       addLog('验证失败: 未找到 .manifest 文件', 'error')
       return
     }
 
-    manifestFiles.value = result.manifestFiles
-    addLog(`找到 ${result.manifestFiles.length} 个清单文件`, 'success')
+    manifestFiles.value = scanResult.manifestFiles
+    addLog(`找到 ${scanResult.manifestFiles.length} 个清单文件`, 'success')
 
-    if (result.jsonFiles.length > 0) {
-      try {
+    // 尝试读取JSON文件获取游戏名称
+    try {
+      const jsonResult = await invoke<{
+        jsonFiles: string[]
+      }>('read_manifest_folder', { folderPath })
+      if (jsonResult.jsonFiles.length > 0) {
         const jsonContent = await invoke<string>('read_text_file', {
-          filePath: result.jsonFiles[0]
+          filePath: jsonResult.jsonFiles[0]
         })
         const jsonData: ManifestJson = JSON.parse(jsonContent)
         gameName.value = jsonData.name || ''
         addLog(`读取到游戏名称: ${gameName.value || '未找到'}`, 'info')
-      } catch (e) {
-        addLog(`读取JSON文件失败: ${e}`, 'warning')
       }
+    } catch (e) {
+      addLog(`读取JSON文件失败: ${e}`, 'warning')
     }
 
     try {

@@ -346,21 +346,21 @@ async fn download_image(url: &str, output_file: &str) -> Result<(), String> {
         .send()
         .await
         .map_err(|e| format!("请求失败: {}", e))?;
-    
+
     if response.status().is_success() {
         // 检查内容类型是否为图片
         let content_type = response.headers()
             .get("Content-Type")
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
-        
+
         if content_type.contains("image") || content_type.contains("application/octet-stream") {
             let bytes = response.bytes().await
                 .map_err(|e| format!("读取响应失败: {}", e))?;
-            
+
             fs::write(output_file, bytes)
                 .map_err(|e| format!("保存文件失败: {}", e))?;
-            
+
             Ok(())
         } else {
             Err(format!("非图片内容({})", content_type))
@@ -368,4 +368,80 @@ async fn download_image(url: &str, output_file: &str) -> Result<(), String> {
     } else {
         Err(format!("HTTP错误: {}", response.status()))
     }
+}
+
+/// 扫描清单文件夹并自动转换格式
+/// 用于游戏本体下载：确保有 VDF 文件（如果没有但有 Lua，则自动转换）
+#[tauri::command]
+pub fn scan_and_convert_manifest_for_download(folder_path: String) -> Result<serde_json::Value, String> {
+    let folder = Path::new(&folder_path);
+
+    // 如果目录不存在，创建它
+    if !folder.exists() {
+        fs::create_dir_all(folder).map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+
+    // 扫描文件
+    let mut lua_files = Vec::new();
+    let mut vdf_files = Vec::new();
+    let mut manifest_files = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(folder) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(ext) = path.extension() {
+                let ext = ext.to_string_lossy().to_lowercase();
+                let path_str = path.to_string_lossy().to_string();
+                match ext.as_str() {
+                    "lua" => lua_files.push(path_str),
+                    "vdf" => vdf_files.push(path_str),
+                    "manifest" => manifest_files.push(path_str),
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    // 检查是否有 VDF 文件
+    let has_vdf = !vdf_files.is_empty();
+    let has_lua = !lua_files.is_empty();
+    let has_manifest = !manifest_files.is_empty();
+
+    // 如果没有 VDF 但有 Lua，自动转换
+    let mut converted = false;
+    if !has_vdf && has_lua {
+        // 使用第一个 Lua 文件进行转换
+        let lua_file = &lua_files[0];
+        let content = fs::read_to_string(lua_file).map_err(|e| format!("读取Lua文件失败: {}", e))?;
+        let depots = parse_lua_content(&content);
+
+        if !depots.is_empty() {
+            let vdf_content = generate_vdf(&depots);
+            let output_path = folder.join("config.vdf");
+            fs::write(&output_path, vdf_content).map_err(|e| format!("写入VDF文件失败: {}", e))?;
+            converted = true;
+            vdf_files.push(output_path.to_string_lossy().to_string());
+        }
+    }
+
+    // 返回结果
+    Ok(serde_json::json!({
+        "success": has_vdf || (has_lua && converted),
+        "hasVdf": has_vdf || converted,
+        "hasLua": has_lua,
+        "hasManifest": has_manifest,
+        "converted": converted,
+        "luaFiles": lua_files,
+        "vdfFiles": vdf_files,
+        "manifestFiles": manifest_files,
+        "message": if has_vdf {
+            "已找到VDF文件"
+        } else if converted {
+            "已自动将Lua转换为VDF"
+        } else if has_lua {
+            "Lua文件转换失败"
+        } else {
+            "未找到VDF或Lua文件"
+        }
+    }))
 }

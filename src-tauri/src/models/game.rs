@@ -157,6 +157,17 @@ pub struct LaunchGameResult {
     pub pid: Option<u32>,
 }
 
+/// 网盘下载链接配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadUrlConfig {
+    /// 网盘来源标识: baidu=百度网盘, thunder=迅雷网盘, lanzou=蓝奏云
+    pub source: String,
+    /// 下载链接URL
+    pub url: String,
+    /// 提取码/密码（可选）
+    pub pwd: Option<String>,
+}
+
 /// 游戏标签配置（来自games_config.json）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameTagConfig {
@@ -165,8 +176,11 @@ pub struct GameTagConfig {
     /// 补丁源路径（可选，如果不提供则自动生成）
     #[serde(default)]
     pub patch_source_path: Option<String>,
-    /// 下载链接
+    /// 下载链接（兼容旧版单链接格式）
     pub download_url: Option<String>,
+    /// 多网盘下载链接列表（新版格式，优先使用）
+    #[serde(default)]
+    pub download_urls: Option<Vec<DownloadUrlConfig>>,
 }
 
 /// 游戏配置数据（来自games_config.json）

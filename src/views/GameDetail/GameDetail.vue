@@ -310,6 +310,15 @@
               <span v-else>应用补丁</span>
             </button>
 
+            <!-- D加密虚拟机类型显示虚拟化环境配置教程按钮 -->
+            <button
+              v-if="tab.patchType === 3"
+              class="tutorial-btn"
+              @click="openVirtualizationTutorial"
+            >
+              虚拟化环境配置教程
+            </button>
+
             <!-- 补丁说明（显示在应用补丁按钮下方） -->
             <div v-if="getPatchReadme(tab.patchType)" class="patch-readme">
               <h4 class="readme-title">补丁说明</h4>
@@ -906,6 +915,15 @@ const openDownloadUrl = async (url: string) => {
   }
 }
 
+// 打开虚拟化环境配置教程视频
+const openVirtualizationTutorial = async () => {
+  try {
+    await invoke('open_virtualization_tutorial')
+  } catch (error) {
+    alert('打开视频失败: ' + error)
+  }
+}
+
 // 选择本地补丁文件并直接应用
 const selectAndApplyPatch = async (tab: any) => {
   if (!gamePath.value) {
@@ -1055,6 +1073,7 @@ const getPatchReadme = (patchType: number): string => {
 /**
  * 检查 manifest 文件夹是否存在
  * 自动查找 resources/manifest/游戏ID 目录
+ * 并自动转换格式（Lua -> VDF）
  */
 const checkManifestFolder = async () => {
   manifestCheckStatus.value = 'checking'
@@ -1068,9 +1087,30 @@ const checkManifestFolder = async () => {
 
     if (manifestPath) {
       manifestFolderPath.value = manifestPath
-      manifestCheckStatus.value = 'found'
-      // 自动设置下载路径
-      await autoSetDownloadPath()
+
+      // 扫描并转换清单文件格式（如果没有VDF但有Lua，自动转换）
+      const scanResult = await invoke<{
+        success: boolean
+        hasVdf: boolean
+        hasLua: boolean
+        hasManifest: boolean
+        converted: boolean
+        message: string
+      }>('scan_and_convert_manifest_for_download', {
+        folderPath: manifestPath
+      })
+
+      if (scanResult.success) {
+        manifestCheckStatus.value = 'found'
+        if (scanResult.converted) {
+          addDownloadLog(`已自动将Lua转换为VDF格式`, 'success')
+        }
+        // 自动设置下载路径
+        await autoSetDownloadPath()
+      } else {
+        manifestCheckStatus.value = 'not_found'
+        addDownloadLog(`清单文件检查失败: ${scanResult.message}`, 'error')
+      }
     } else {
       manifestCheckStatus.value = 'not_found'
     }
@@ -1910,6 +1950,26 @@ const restartSteam = async () => {
   background-color: var(--steam-text-secondary);
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+/* 虚拟化环境配置教程按钮 */
+.tutorial-btn {
+  margin-top: 12px;
+  padding: 12px 24px;
+  background: rgba(156, 39, 176, 0.2);
+  color: #ce93d8;
+  border: 1px solid rgba(156, 39, 176, 0.5);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+}
+
+.tutorial-btn:hover {
+  background: rgba(156, 39, 176, 0.3);
+  border-color: rgba(156, 39, 176, 0.7);
 }
 
 /* 补丁结果提示 */

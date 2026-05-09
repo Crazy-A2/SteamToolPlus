@@ -292,6 +292,7 @@ fn main() {
             commands::tool_commands::get_vdf_files_in_folder,
             commands::tool_commands::convert_vdf_to_lua,
             commands::tool_commands::download_steam_cover,
+            commands::tool_commands::scan_and_convert_manifest_for_download,
             // 下载命令
             download_commands::read_manifest_folder,
             download_commands::read_text_file,

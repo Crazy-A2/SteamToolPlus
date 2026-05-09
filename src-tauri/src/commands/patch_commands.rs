@@ -2986,7 +2986,7 @@ pub async fn write_text_file(path: String, content: String) -> Result<(), String
 }
 
 /// 打开虚拟化环境配置教程视频
-/// 使用系统默认应用打开 resources/D加密虚拟化（虚拟机）环境搭建教程.mp4
+/// 使用系统默认应用打开 resources/D_加密虚拟化（虚拟机）环境搭建教程.mp4
 #[tauri::command]
 pub async fn open_virtualization_tutorial(app: AppHandle) -> Result<(), String> {
     use std::process::Command;
@@ -2999,7 +2999,7 @@ pub async fn open_virtualization_tutorial(app: AppHandle) -> Result<(), String> 
         .to_path_buf();
     
     // 构建视频文件路径
-    let video_path = exe_dir.join("resources").join("D加密虚拟化（虚拟机）环境搭建教程.mp4");
+    let video_path = exe_dir.join("resources").join("D_加密虚拟化（虚拟机）环境搭建教程.mp4");
     
     // 检查文件是否存在
     if !video_path.exists() {

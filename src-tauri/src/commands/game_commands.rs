@@ -67,7 +67,9 @@ pub fn import_steam_games(state: tauri::State<AppState>) -> Result<Vec<Game>, St
 #[tauri::command]
 pub async fn load_games_config_from_file(app: tauri::AppHandle) -> Result<Vec<GameConfigData>, String> {
     // 获取资源目录路径
-    let resource_dir = get_resource_dir(&app)?;
+    let resource_dir = get_resource_dir(&app)
+        .map_err(|e| format!("获取资源目录失败: {}", e))?;
+    
     let config_path = resource_dir.join("games_config.json");
     
     // 检查文件是否存在
