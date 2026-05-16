@@ -1,7 +1,31 @@
 <template>
   <div class="manifest-import-page">
     <div class="page-header">
-      <h1>清单入库</h1>
+      <div class="page-title-row">
+        <h1>清单入库</h1>
+        <button
+          class="manifest-link-btn"
+          @click="openExternalLink('https://pan.baidu.com/s/1FTZyknIObyzMuLAJC-Uj9g?pwd=8uwx')"
+        >
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          百度网盘
+        </button>
+        <button
+          class="manifest-link-btn"
+          @click="openExternalLink('https://pan.xunlei.com/s/VOrmjucdcpCilK1xnElvCI9vA1?pwd=z2gb#')"
+        >
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          迅雷网盘
+        </button>
+      </div>
       <p class="subtitle">将清单文件导入Steam，使游戏库中显示对应游戏</p>
     </div>
 
@@ -204,6 +228,7 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
+import { open as openShell } from '@tauri-apps/plugin-shell'
 import Button from '../../components/common/Button.vue'
 import { useConfigStore } from '../../store/config.store'
 
@@ -466,6 +491,15 @@ async function restartSteam() {
     addLog(`Steam重启失败: ${error}`, 'error')
   }
 }
+
+// 打开外部链接
+async function openExternalLink(url: string) {
+  try {
+    await openShell(url)
+  } catch (error) {
+    addLog(`打开链接失败: ${error}`, 'error')
+  }
+}
 </script>
 
 <style scoped>
@@ -482,10 +516,44 @@ async function restartSteam() {
   border-bottom: 1px solid var(--steam-border);
 }
 
+.page-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
 .page-header h1 {
   font-size: 24px;
-  margin-bottom: 8px;
   color: var(--steam-text-primary);
+  margin: 0;
+}
+
+/* 网盘链接按钮 */
+.manifest-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--steam-accent-blue);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.manifest-link-btn:hover {
+  background: var(--steam-accent-blue-hover, #4aa8ff);
+  transform: translateY(-1px);
+}
+
+.btn-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .subtitle {

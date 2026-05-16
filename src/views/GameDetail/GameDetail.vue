@@ -393,9 +393,11 @@ import {
 import { getCategoryName, getCategoryColor } from '../../constants/game'
 import { safeAsync } from '../../utils/async-helper'
 import { getFileName, sanitizeFolderName } from '../../utils/file-helper'
+import { useConfigStore } from '../../store/config.store'
 
 const route = useRoute()
 const router = useRouter()
+const configStore = useConfigStore()
 
 // 游戏ID
 const gameId = computed(() => route.params.id as string)
@@ -1243,6 +1245,31 @@ const checkGameManifest = async () => {
  */
 const importToSteam = async () => {
   if (isImportingToSteam.value) return
+
+  // 检查是否设置了Steam路径
+  let steamPath = configStore.config?.gameDirs?.steamPath
+  
+  if (!steamPath) {
+    // 未设置Steam路径，弹出选择对话框
+    const selected = await open({
+      directory: true,
+      title: '请选择Steam安装目录'
+    })
+    
+    if (!selected) {
+      // 用户取消了选择
+      return
+    }
+    
+    // 保存选择的Steam路径到配置
+    steamPath = selected
+    await configStore.updateConfig({
+      gameDirs: {
+        ...configStore.config?.gameDirs,
+        steamPath: selected
+      }
+    })
+  }
 
   isImportingToSteam.value = true
 
