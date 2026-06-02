@@ -205,10 +205,8 @@ export interface GameConfigData {
   chinese_name: string
   /** 是否可下载 */
   downloadable: boolean
-  /** 是否有解压即玩版本 */
+  /** 是否有解压即玩版本（夸克网盘二维码） */
   has_extract_play?: boolean
-  /** 解压即玩下载链接 */
-  extract_play_urls?: DownloadUrlConfig[]
   /** 修改器配置 */
   trainer?: TrainerConfig
   /** 补丁标签列表 */

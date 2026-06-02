@@ -5,33 +5,68 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
 /// 获取资源目录路径
-/// 优先检查程序所在目录的 resources 文件夹，然后使用 Tauri 的 resource_dir
+/// 按以下优先级查找：
+/// 1. 程序所在目录的 resources/Resources 文件夹（打包后）
+/// 2. 程序所在目录的父目录的 resources 文件夹（开发模式）
+/// 3. 向上查找项目根目录的 resources 文件夹（开发模式）
+/// 4. Tauri 的 resource_dir
 pub fn get_resource_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    // 首先检查程序所在目录的 resources 文件夹（打包后的标准结构）
+    // 获取程序所在目录
     let exe_dir = std::env::current_exe()
         .map_err(|e| format!("无法获取程序路径: {}", e))?
         .parent()
         .ok_or("无法获取程序所在目录")?
         .to_path_buf();
 
-    // 尝试小写的 resources
+    log::info!("程序所在目录: {}", exe_dir.display());
+
+    // 1. 尝试程序所在目录的 resources（打包后的标准结构）
     let resources_path = exe_dir.join("resources");
     if resources_path.exists() && resources_path.is_dir() {
+        log::info!("找到 resources 目录: {}", resources_path.display());
         return Ok(resources_path);
     }
 
-    // 尝试大写的 Resources
+    // 2. 尝试程序所在目录的 Resources（兼容大小写）
     let resources_path_capital = exe_dir.join("Resources");
     if resources_path_capital.exists() && resources_path_capital.is_dir() {
+        log::info!("找到 Resources 目录: {}", resources_path_capital.display());
         return Ok(resources_path_capital);
     }
 
-    // 最后尝试使用 Tauri 的 resource_dir
+    // 3. 如果在 target/debug 或 target/release 目录下，向上查找项目根目录
+    let mut check_dir = exe_dir.clone();
+    for depth in 0..5 {
+        if let Some(parent) = check_dir.parent() {
+            check_dir = parent.to_path_buf();
+            let project_resources = check_dir.join("resources");
+            log::info!("检查项目 resources 路径 (深度{}): {}", depth, project_resources.display());
+            if project_resources.exists() && project_resources.is_dir() {
+                log::info!("找到项目 resources 目录: {}", project_resources.display());
+                return Ok(project_resources);
+            }
+        } else {
+            break;
+        }
+    }
+
+    // 4. 最后尝试使用 Tauri 的 resource_dir
     if let Ok(resource_dir) = app.path().resource_dir() {
+        log::info!("Tauri resource_dir: {}", resource_dir.display());
         if resource_dir.exists() && resource_dir.is_dir() {
             return Ok(resource_dir);
         }
     }
 
+    // 5. 如果都找不到，尝试当前工作目录
+    if let Ok(current_dir) = std::env::current_dir() {
+        let cwd_resources = current_dir.join("resources");
+        if cwd_resources.exists() && cwd_resources.is_dir() {
+            log::info!("找到当前工作目录 resources: {}", cwd_resources.display());
+            return Ok(cwd_resources);
+        }
+    }
+
+    log::error!("无法找到资源目录，程序目录: {}", exe_dir.display());
     Err("无法找到资源目录".to_string())
 }

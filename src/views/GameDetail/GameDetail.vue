@@ -1,5 +1,21 @@
 <template>
   <div class="game-detail-page">
+    <!-- 首次使用配置弹窗 -->
+    <FirstTimeSetupModal
+      :show="showFirstTimeSetup"
+      @close="handleFirstTimeSetupClose"
+      @confirm="handleFirstTimeSetupConfirm"
+    />
+
+    <!-- 二维码弹窗 -->
+    <QRCodeModal
+      v-model="showQRCodeModal"
+      :title="qrCodeTitle"
+      :qr-image-url="qrCodeImageUrl"
+      :hint="qrCodeHint"
+      @close="handleQRCodeClose"
+    />
+
     <!-- 返回按钮和标题栏 -->
     <div class="detail-header">
       <button class="back-btn" @click="goBack">
@@ -148,10 +164,6 @@
               <h4>方法一【开始下载】</h4>
               <p>下载Steam正版分流文件，下载完成后需要注入补丁才能游玩</p>
             </div>
-            <div class="download-option">
-              <h4>方法二【解压即玩】（请用手机转存至网盘，感谢支持）</h4>
-              <p>直接从网盘下载完整游戏文件，下载完成后解压即可游玩，无需额外操作（都是无法联机版，除非网盘文件特别标注或者手动注入联机补丁）</p>
-            </div>
           </div>
 
           <!-- 下载按钮组 -->
@@ -174,40 +186,6 @@
               </svg>
               {{ getDownloadButtonText() }}
             </button>
-
-            <!-- 解压即玩按钮容器 -->
-            <div class="extract-play-wrapper">
-              <button
-                class="extract-play-btn"
-                :class="{ disabled: !game?.has_extract_play || !game?.extract_play_urls || game.extract_play_urls.length === 0 }"
-                :disabled="!game?.has_extract_play || !game?.extract_play_urls || game.extract_play_urls.length === 0"
-                @click="showExtractPlayMenu = !showExtractPlayMenu"
-                :title="!game?.has_extract_play ? '暂无可用的解压即玩版本' : ''"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                解压即玩
-                <svg class="dropdown-arrow" :class="{ open: showExtractPlayMenu }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </button>
-
-              <!-- 解压即玩下拉菜单 -->
-              <div v-if="showExtractPlayMenu && game?.extract_play_urls && game.extract_play_urls.length > 0" class="extract-play-dropdown">
-                <div
-                  v-for="(item, index) in game.extract_play_urls"
-                  :key="index"
-                  class="extract-play-item"
-                  @click="openDownloadUrl(item.url)"
-                >
-                  <span class="source-name">{{ getDownloadSourceName(item.source) }}</span>
-                  <span v-if="item.pwd" class="pwd-hint">提取码: {{ item.pwd }}</span>
-                </div>
-              </div>
-            </div>
 
             <!-- 暂停/停止下载按钮 -->
             <button
@@ -430,6 +408,42 @@
           </div>
         </div>
 
+        <!-- 解压即玩标签页 -->
+        <div v-if="currentTab === 'extract-play'" class="tab-panel">
+          <h3 class="panel-title">解压即玩</h3>
+          <div class="extract-play-content">
+            <div class="extract-play-description">
+              <p>直接从网盘下载完整游戏文件（豪华版），下载完成后解压即可游玩，无需额外操作。</p>
+              <p class="extract-play-note">（都是无法联机版，除非网盘文件特别标注或者手动注入联机补丁）</p>
+            </div>
+
+            <!-- 夸克网盘下载区域 -->
+            <div class="download-section">
+              <p class="download-section-title">下载游戏：</p>
+              <div class="download-buttons">
+                <div class="download-btn-wrapper">
+                  <button
+                    class="download-patch-btn"
+                    :class="{ disabled: !quarkQRCodeExists }"
+                    :disabled="!quarkQRCodeExists"
+                    @click="openQuarkQRCode"
+                    :title="quarkQRCodeExists ? '点击扫码下载' : '暂未上传完游戏'"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    夸克网盘
+                  </button>
+                  <span v-if="!quarkQRCodeExists" class="pwd-hint">暂未上传完游戏</span>
+                </div>
+              </div>
+              <p class="download-hint">（请先转存至您的网盘，避免和谐，也将给作者带来无限的更新动力）</p>
+            </div>
+          </div>
+        </div>
+
         <!-- 修改器标签页 -->
         <div v-if="currentTab === 'trainer'" class="tab-panel">
           <h3 class="panel-title">游戏修改器</h3>
@@ -485,7 +499,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
+import { convertFileSrc } from '@tauri-apps/api/core'
 import DownloadProgress from '../../components/download/DownloadProgress.vue'
+import QRCodeModal from '../../components/common/QRCodeModal.vue'
 import type { DownloadProgress as DownloadProgressType, DepotProgress } from '../../types/download.types'
 import type { GameConfigData, GameTagConfig } from '../../types'
 import { getPatchSourcePath } from '../../types'
@@ -501,6 +517,7 @@ import { getCategoryName, getCategoryColor } from '../../constants/game'
 import { safeAsync } from '../../utils/async-helper'
 import { getFileName, sanitizeFolderName } from '../../utils/file-helper'
 import { useConfigStore } from '../../store/config.store'
+import FirstTimeSetupModal from '../../components/manifest/FirstTimeSetupModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -531,9 +548,6 @@ const manifestCheckStatus = ref<'checking' | 'found' | 'not_found'>('checking')
 
 // 当前选中的标签页
 const currentTab = ref('')
-
-// 解压即玩下拉菜单显示状态
-const showExtractPlayMenu = ref(false)
 
 // 修改器本地文件内容
 const trainerContent = ref<string>('')
@@ -583,6 +597,68 @@ let monitorInterval: number | null = null
 // 入库Steam状态
 const isImportingToSteam = ref(false)
 const manifestExists = ref(false)
+const showFirstTimeSetup = ref(false)
+
+// 二维码弹窗状态
+const showQRCodeModal = ref(false)
+const qrCodeTitle = ref('夸克网盘下载')
+const qrCodeImageUrl = ref('')
+const qrCodeHint = ref('请使用夸克APP扫码下载')
+
+// 夸克网盘二维码是否存在
+const quarkQRCodeExists = ref(false)
+
+/**
+ * 获取夸克网盘二维码图片路径
+ * 图片存放在 resources/pic/Quark_QR/{game_id}.png
+ */
+const getQuarkQRCodePath = (gameId: string): string => {
+  // 使用相对路径，程序根目录下的 resources/pic/Quark_QR/
+  return `resources/pic/Quark_QR/${gameId}.png`
+}
+
+/**
+ * 检查夸克网盘二维码是否存在
+ */
+const checkQuarkQRCodeExists = async (gameId: string): Promise<boolean> => {
+  try {
+    const qrPath = getQuarkQRCodePath(gameId)
+    const exists = await invoke<boolean>('check_file_exists', { path: qrPath })
+    return exists
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 打开夸克网盘二维码弹窗
+ */
+const openQuarkQRCode = async () => {
+  // 检查二维码是否存在
+  const exists = await checkQuarkQRCodeExists(gameId.value)
+  if (!exists) {
+    return
+  }
+
+  // 设置弹窗内容
+  qrCodeTitle.value = '夸克网盘下载'
+  qrCodeHint.value = '请使用夸克APP扫码下载'
+
+  // 获取二维码图片URL
+  const qrPath = getQuarkQRCodePath(gameId.value)
+  qrCodeImageUrl.value = convertFileSrc(qrPath)
+
+  // 显示弹窗
+  showQRCodeModal.value = true
+}
+
+/**
+ * 关闭二维码弹窗
+ */
+const handleQRCodeClose = () => {
+  showQRCodeModal.value = false
+  qrCodeImageUrl.value = ''
+}
 const canImportToSteam = computed(() => {
   return manifestExists.value && !isImportingToSteam.value
 })
@@ -592,21 +668,50 @@ const importSteamTooltip = computed(() => {
   return '将游戏清单导入Steam'
 })
 
+// 首次使用配置 - 关闭
+function handleFirstTimeSetupClose() {
+  showFirstTimeSetup.value = false
+}
+
+// 首次使用配置 - 确认
+async function handleFirstTimeSetupConfirm() {
+  try {
+    // 保存标志到 config.json
+    await configStore.updateConfig({
+      launch: {
+        ...configStore.config?.launch,
+        manifestImportInitialized: true
+      }
+    })
+    alert('配置已保存，请完成初始化操作后重新点击入库按钮。')
+  } catch (error) {
+    alert(`保存配置失败: ${error}`)
+  } finally {
+    showFirstTimeSetup.value = false
+  }
+}
+
 // 可用的标签页
+// 优先级：游戏下载 > 解压即玩 > steam入库 > 各类补丁
 const availableTabs = computed(() => {
   const tabs: { id: string; name: string }[] = []
 
-  // 如果有downloadable，添加游戏下载标签
+  // 1. 如果有downloadable，添加游戏下载标签
   if (game.value?.downloadable) {
     tabs.push({ id: 'download', name: '游戏下载' })
   }
 
-  // 如果有清单文件，添加入库Steam标签
+  // 2. 如果有解压即玩版本，添加解压即玩标签
+  if (game.value?.has_extract_play === true) {
+    tabs.push({ id: 'extract-play', name: '解压即玩' })
+  }
+
+  // 3. 如果有清单文件，添加入库Steam标签
   if (manifestExists.value) {
     tabs.push({ id: 'import', name: '入库Steam' })
   }
 
-  // 添加游戏分类标签
+  // 4. 添加游戏分类标签（各类补丁）
   game.value?.tags.forEach(tag => {
     tabs.push({
       id: `patch-${tag.patch_type}`,
@@ -614,7 +719,7 @@ const availableTabs = computed(() => {
     })
   })
 
-  // 如果有修改器配置且包含下载链接，添加修改器标签
+  // 5. 如果有修改器配置且包含下载链接，添加修改器标签
   if (game.value?.trainer?.download_urls && game.value.trainer.download_urls.length > 0) {
     tabs.push({ id: 'trainer', name: '修改器' })
   }
@@ -1058,6 +1163,15 @@ const openDownloadUrl = async (url: string) => {
   }
 }
 
+// 打开外部链接（用于解压即玩等）
+const openExternalLink = async (url: string) => {
+  try {
+    await invoke('open_external_link', { url })
+  } catch (error) {
+    alert('打开链接失败: ' + error)
+  }
+}
+
 // 打开虚拟化环境配置教程视频
 const openVirtualizationTutorial = async () => {
   try {
@@ -1200,6 +1314,30 @@ onMounted(async () => {
     '加载游戏数据失败'
   )
   if (gameData) {
+    // 检查游戏目录是否实际存在（防止用户手动删除游戏文件）
+    let isGameDirExists = false
+    if (gameData.install_path) {
+      try {
+        isGameDirExists = await invoke<boolean>('check_directory_exists', {
+          path: gameData.install_path
+        })
+      } catch {
+        isGameDirExists = false
+      }
+    }
+
+    // 如果记录为已下载但实际目录不存在，重置状态
+    if (gameData.download_status === 'completed' && !isGameDirExists) {
+      console.log('游戏目录不存在，重置下载状态:', gameData.install_path)
+      gameData.download_status = ''
+      gameData.is_installed = false
+      // 更新到 game.json
+      await safeAsync(
+        () => upsertGameData(gameData),
+        '重置游戏状态失败'
+      )
+    }
+
     existingGameData.value = gameData
     // 恢复下载路径
     if (gameData.download_path) {
@@ -1223,6 +1361,8 @@ onMounted(async () => {
   await checkManifestFolder()
   // 加载所有补丁说明
   await loadPatchReadmes()
+  // 检查夸克网盘二维码是否存在
+  quarkQRCodeExists.value = await checkQuarkQRCodeExists(gameId.value)
   // 检查本地补丁文件状态
   await checkPatchLocalStatus()
   // 检查游戏清单文件是否存在（用于入库Steam按钮）
@@ -1391,6 +1531,14 @@ const checkGameManifest = async () => {
 const importToSteam = async () => {
   if (isImportingToSteam.value) return
 
+  // 检查是否是第一次使用清单入库（从config.json读取）
+  const hasCompletedSetup = configStore.config?.launch?.manifestImportInitialized
+  if (!hasCompletedSetup) {
+    // 显示首次使用配置弹窗
+    showFirstTimeSetup.value = true
+    return
+  }
+
   // 检查是否设置了Steam路径
   let steamPath = configStore.config?.gameDirs?.steamPath
   
@@ -1410,8 +1558,8 @@ const importToSteam = async () => {
     steamPath = selected
     await configStore.updateConfig({
       gameDirs: {
-        ...configStore.config?.gameDirs,
-        steamPath: selected
+        steamPath: selected,
+        coversPath: configStore.config?.gameDirs?.coversPath || 'data/covers'
       }
     })
   }
@@ -1925,95 +2073,34 @@ const restartSteam = async () => {
   line-height: 1.5;
 }
 
-/* 解压即玩按钮容器 */
-.extract-play-wrapper {
-  position: relative;
-  display: inline-flex;
+/* 解压即玩标签页样式 */
+.extract-play-content {
+  padding: 20px;
 }
 
-/* 解压即玩按钮 */
-.extract-play-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 24px;
-  border: none;
+.extract-play-description {
+  margin-bottom: 24px;
+  padding: 16px;
+  background-color: var(--steam-bg-secondary);
   border-radius: 8px;
-  background-color: #8b5cf6;
-  color: white;
+  border-left: 4px solid #8b5cf6;
+}
+
+.extract-play-description p {
+  margin: 0 0 8px 0;
   font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-
-.extract-play-btn:hover:not(.disabled) {
-  background-color: #7c3aed;
-}
-
-.extract-play-btn.disabled {
-  background-color: var(--steam-text-secondary);
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.extract-play-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
-.extract-play-btn .dropdown-arrow {
-  width: 16px;
-  height: 16px;
-  transition: transform 0.2s ease;
-}
-
-.extract-play-btn .dropdown-arrow.open {
-  transform: rotate(180deg);
-}
-
-/* 解压即玩下拉菜单 */
-.extract-play-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  background-color: var(--steam-bg-primary);
-  border: 1px solid var(--steam-border);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 100;
-  min-width: 200px;
-  overflow: hidden;
-}
-
-.extract-play-item {
-  display: flex;
-  flex-direction: column;
-  padding: 12px 16px;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-  border-bottom: 1px solid var(--steam-border);
-}
-
-.extract-play-item:last-child {
-  border-bottom: none;
-}
-
-.extract-play-item:hover {
-  background-color: var(--steam-bg-hover);
-}
-
-.extract-play-item .source-name {
-  font-size: 14px;
-  font-weight: 500;
   color: var(--steam-text-primary);
+  line-height: 1.6;
 }
 
-.extract-play-item .pwd-hint {
-  font-size: 12px;
+.extract-play-description p:last-child {
+  margin-bottom: 0;
+}
+
+.extract-play-note {
+  font-size: 13px;
   color: var(--steam-text-secondary);
-  margin-top: 4px;
+  font-style: italic;
 }
 
 .loading-icon {

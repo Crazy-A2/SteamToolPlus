@@ -3,7 +3,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
-import type { Game } from '../types/game.types'
+import type { Game, GameConfigData } from '../types/game.types'
 
 /**
  * 获取游戏列表
@@ -44,6 +44,6 @@ export async function getGameLibraryImage(gameId: string): Promise<string> {
 /**
  * 从配置文件加载游戏数据
  */
-export async function loadGamesConfigFromFile(): Promise<Game[]> {
-  return invoke<Game[]>('load_games_config_from_file')
+export async function loadGamesConfigFromFile(): Promise<GameConfigData[]> {
+  return invoke<GameConfigData[]>('load_games_config_from_file')
 }

@@ -97,49 +97,133 @@ pub fn sync_game_data_to_backup() -> Result<(), String> {
 }
 
 /// 加载游戏数据
+/// 具有容错机制：如果主文件损坏，自动尝试从备份恢复
 pub async fn load_game_data(_app: AppHandle) -> Result<GameDataCollection, String> {
     // 尝试从备份恢复
     let _ = restore_game_data_from_backup();
 
     let data_path = get_game_data_path()?;
+    let backup_path = data_path.with_extension("backup");
 
     // 如果文件不存在，返回空集合
     if !data_path.exists() {
         return Ok(GameDataCollection::default());
     }
 
-    // 读取文件内容
-    let content = fs::read_to_string(&data_path)
-        .await
-        .map_err(|e| format!("读取游戏数据文件失败: {}", e))?;
+    // 尝试读取主文件
+    let content = match fs::read_to_string(&data_path).await {
+        Ok(content) => content,
+        Err(e) => {
+            // 主文件读取失败，尝试从备份恢复
+            if backup_path.exists() {
+                match fs::read_to_string(&backup_path).await {
+                    Ok(backup_content) => {
+                        // 备份读取成功，尝试恢复
+                        let _ = fs::copy(&backup_path, &data_path).await;
+                        backup_content
+                    }
+                    Err(_) => {
+                        return Err(format!("读取游戏数据文件失败: {}", e));
+                    }
+                }
+            } else {
+                return Err(format!("读取游戏数据文件失败: {}", e));
+            }
+        }
+    };
 
-    // 解析JSON
-    let collection: GameDataCollection = serde_json::from_str(&content)
-        .map_err(|e| format!("解析游戏数据失败: {}", e))?;
+    // 尝试解析JSON
+    let collection: GameDataCollection = match serde_json::from_str(&content) {
+        Ok(collection) => collection,
+        Err(_e) => {
+            // 主文件解析失败，尝试从备份恢复
+            if backup_path.exists() {
+                match fs::read_to_string(&backup_path).await {
+                    Ok(backup_content) => {
+                        match serde_json::from_str(&backup_content) {
+                            Ok(backup_collection) => {
+                                // 备份解析成功，恢复备份
+                                let _ = fs::copy(&backup_path, &data_path).await;
+                                backup_collection
+                            }
+                            Err(_) => {
+                                // 备份也损坏，返回空集合并记录错误
+                                return Ok(GameDataCollection::default());
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // 备份读取失败，返回空集合
+                        return Ok(GameDataCollection::default());
+                    }
+                }
+            } else {
+                // 没有备份，返回空集合
+                return Ok(GameDataCollection::default());
+            }
+        }
+    };
 
     Ok(collection)
 }
 
 /// 保存游戏数据
+/// 使用原子写入机制：先写入临时文件，成功后再重命名为正式文件
+/// 这样即使程序崩溃，也不会留下损坏的正式文件
 pub async fn save_game_data(_app: AppHandle, collection: &GameDataCollection) -> Result<(), String> {
     ensure_data_dir_exists().await?;
 
     let data_path = get_game_data_path()?;
+    
+    // 创建临时文件路径（在同一目录下，确保重命名是原子操作）
+    let temp_path = data_path.with_extension("tmp");
+    let backup_path = data_path.with_extension("backup");
 
     // 序列化为JSON
     let content = serde_json::to_string_pretty(collection)
         .map_err(|e| format!("序列化游戏数据失败: {}", e))?;
 
-    // 写入文件
-    let mut file = fs::File::create(&data_path)
+    // 步骤1：如果存在旧的临时文件，先删除
+    if temp_path.exists() {
+        let _ = fs::remove_file(&temp_path).await;
+    }
+
+    // 步骤2：写入临时文件
+    let mut file = fs::File::create(&temp_path)
         .await
-        .map_err(|e| format!("创建游戏数据文件失败: {}", e))?;
+        .map_err(|e| format!("创建临时游戏数据文件失败: {}", e))?;
 
     file.write_all(content.as_bytes())
         .await
-        .map_err(|e| format!("写入游戏数据失败: {}", e))?;
+        .map_err(|e| format!("写入临时游戏数据失败: {}", e))?;
 
-    // 同步到备份
+    // 步骤3：确保数据完全写入磁盘（fsync）
+    file.sync_all()
+        .await
+        .map_err(|e| format!("同步游戏数据到磁盘失败: {}", e))?;
+
+    // 步骤4：如果存在旧的正式文件，先备份
+    if data_path.exists() {
+        let _ = fs::rename(&data_path, &backup_path).await;
+    }
+
+    // 步骤5：原子重命名临时文件为正式文件
+    fs::rename(&temp_path, &data_path)
+        .await
+        .map_err(|e| {
+            // 重命名失败，尝试从备份恢复
+            if backup_path.exists() {
+                let _ = std::fs::rename(&backup_path, &data_path);
+            }
+            format!("保存游戏数据失败: {}", e)
+        })?;
+
+    // 步骤6：删除备份文件（保存成功后才删除）
+    if backup_path.exists() {
+        let _ = fs::remove_file(&backup_path).await;
+    }
+
+    // 步骤7：同步到备份目录
     sync_game_data_to_backup()?;
 
     Ok(())

@@ -1,5 +1,12 @@
 <template>
   <div class="manifest-import-page">
+    <!-- 首次使用配置弹窗 -->
+    <FirstTimeSetupModal
+      :show="showFirstTimeSetup"
+      @close="handleFirstTimeSetupClose"
+      @confirm="handleFirstTimeSetupConfirm"
+    />
+
     <div class="page-header">
       <div class="page-title-row">
         <h1>清单入库</h1>
@@ -230,6 +237,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { open as openShell } from '@tauri-apps/plugin-shell'
 import Button from '../../components/common/Button.vue'
+import FirstTimeSetupModal from '../../components/manifest/FirstTimeSetupModal.vue'
 import { useConfigStore } from '../../store/config.store'
 
 interface LogItem {
@@ -268,6 +276,8 @@ const logs = ref<LogItem[]>([])
 const progressPercent = ref(0)
 const importStats = ref<ImportStats>({ total: 0, success: 0, fail: 0 })
 const logArea = ref<HTMLDivElement>()
+const showFirstTimeSetup = ref(false)
+const isFirstTimeSetup = ref(false)
 
 // 计算属性
 const sourceTypeText = computed(() => {
@@ -300,6 +310,30 @@ onMounted(async () => {
     steamPath.value = configStore.config.gameDirs.steamPath
   }
 })
+
+// 首次使用配置 - 关闭
+function handleFirstTimeSetupClose() {
+  showFirstTimeSetup.value = false
+}
+
+// 首次使用配置 - 确认
+async function handleFirstTimeSetupConfirm() {
+  try {
+    // 保存标志到 config.json
+    await configStore.updateConfig({
+      launch: {
+        ...configStore.config?.launch,
+        manifestImportInitialized: true
+      }
+    })
+    addLog('配置已保存', 'success')
+    addLog('请完成初始化操作后重新点击开始入库', 'info')
+    isFirstTimeSetup.value = false
+    showFirstTimeSetup.value = false
+  } catch (error) {
+    addLog(`保存配置失败: ${error}`, 'error')
+  }
+}
 
 // 添加日志
 function addLog(message: string, type: 'info' | 'success' | 'error' = 'info') {
@@ -418,6 +452,14 @@ async function startImport() {
     return
   }
 
+  // 检查是否是第一次使用清单入库（从config.json读取）
+  const hasCompletedSetup = configStore.config?.launch?.manifestImportInitialized
+  if (!hasCompletedSetup) {
+    // 显示首次使用配置弹窗
+    showFirstTimeSetup.value = true
+    return
+  }
+
   isImporting.value = true
   importStats.value = { total: 0, success: 0, fail: 0 }
   progressPercent.value = 0
@@ -507,6 +549,9 @@ async function openExternalLink(url: string) {
   max-width: 1400px;
   margin: 0 auto;
   padding: 24px;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .page-header {

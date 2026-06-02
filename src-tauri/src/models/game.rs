@@ -205,12 +205,9 @@ pub struct GameConfigData {
     pub chinese_name: String,
     /// 是否可下载
     pub downloadable: bool,
-    /// 是否有解压即玩版本
+    /// 是否有解压即玩版本（夸克网盘二维码）
     #[serde(default)]
     pub has_extract_play: Option<bool>,
-    /// 解压即玩下载链接
-    #[serde(default)]
-    pub extract_play_urls: Option<Vec<DownloadUrlConfig>>,
     /// 修改器配置
     #[serde(default)]
     pub trainer: Option<TrainerConfig>,

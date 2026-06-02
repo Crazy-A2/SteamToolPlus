@@ -283,6 +283,7 @@ pub fn import_manifest_to_steam(
         .collect();
 
     // 复制Lua文件
+    let mut lua_errors = Vec::new();
     for lua_file in &all_lua_files {
         let source = Path::new(lua_file);
         if let Some(filename) = source.file_name() {
@@ -293,13 +294,16 @@ pub fn import_manifest_to_steam(
                     log::info!("已复制Lua文件: {} -> {}", lua_file, dest.display());
                 }
                 Err(e) => {
-                    log::error!("复制Lua文件失败 {}: {}", lua_file, e);
+                    let err_msg = format!("复制Lua文件失败 {}: {}", lua_file, e);
+                    log::error!("{}", err_msg);
+                    lua_errors.push(err_msg);
                 }
             }
         }
     }
 
     // 复制Manifest文件
+    let mut manifest_errors = Vec::new();
     for manifest_file in &manifest_files {
         let source = Path::new(manifest_file);
         if let Some(filename) = source.file_name() {
@@ -310,10 +314,29 @@ pub fn import_manifest_to_steam(
                     log::info!("已复制Manifest文件: {} -> {}", manifest_file, dest.display());
                 }
                 Err(e) => {
-                    log::error!("复制Manifest文件失败 {}: {}", manifest_file, e);
+                    let err_msg = format!("复制Manifest文件失败 {}: {}", manifest_file, e);
+                    log::error!("{}", err_msg);
+                    manifest_errors.push(err_msg);
                 }
             }
         }
+    }
+
+    // 检查是否有错误
+    if !lua_errors.is_empty() || !manifest_errors.is_empty() {
+        let mut error_msg = String::from("清单入库部分失败:\n");
+        for err in &lua_errors {
+            error_msg.push_str(&format!("- {}\n", err));
+        }
+        for err in &manifest_errors {
+            error_msg.push_str(&format!("- {}\n", err));
+        }
+        return Err(error_msg);
+    }
+
+    // 检查是否导入了任何文件
+    if imported_lua == 0 && imported_manifest == 0 {
+        return Err("没有成功导入任何文件，请检查文件是否存在".to_string());
     }
 
     Ok(json!({
@@ -513,4 +536,188 @@ pub fn import_game_manifest_to_steam(app: AppHandle, game_id: String) -> Result<
 
     // 调用通用的导入函数
     import_manifest_to_steam(steam_path, lua_files, manifest_files, vdf_files)
+}
+
+/// 首次使用清单入库配置
+/// 打开SteamTools和示例文件夹，供用户完成初始化
+#[tauri::command]
+pub fn setup_manifest_import_first_time(app: AppHandle) -> Result<serde_json::Value, String> {
+    use std::process::Command;
+
+    // 获取资源目录
+    let resource_dir = get_resource_dir(&app)?;
+    log::info!("资源目录: {}", resource_dir.display());
+
+    // SteamTools路径
+    let steamtools_exe = resource_dir.join("SteamTools").join("SteamTools.exe");
+    log::info!("SteamTools路径: {}", steamtools_exe.display());
+
+    // 示例文件夹路径
+    let example_folder = resource_dir.join("第一次使用清单入库请将这个文件夹中的内容拖入_steamtools_的图标");
+    log::info!("示例文件夹路径: {}", example_folder.display());
+
+    // 检查SteamTools是否存在
+    if !steamtools_exe.exists() {
+        log::error!("未找到SteamTools.exe: {}", steamtools_exe.display());
+        return Err(format!("未找到SteamTools.exe，路径: {}", steamtools_exe.display()));
+    }
+
+    // 检查示例文件夹是否存在
+    if !example_folder.exists() {
+        log::error!("未找到示例文件夹: {}", example_folder.display());
+        return Err(format!("未找到示例文件夹，路径: {}", example_folder.display()));
+    }
+
+    // 启动SteamTools - 使用Command直接启动
+    let steamtools_path_str = steamtools_exe.to_string_lossy().to_string();
+    log::info!("正在启动SteamTools: {}", steamtools_path_str);
+
+    #[cfg(target_os = "windows")]
+    let steam_result = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new(&steamtools_path_str)
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let steam_result = Command::new(&steamtools_path_str).spawn();
+
+    match steam_result {
+        Ok(_) => {
+            log::info!("已启动SteamTools: {}", steamtools_exe.display());
+        }
+        Err(e) => {
+            log::error!("启动SteamTools失败: {}", e);
+            return Err(format!("启动SteamTools失败: {}", e));
+        }
+    }
+
+    // 打开示例文件夹 - 使用explorer.exe
+    let example_folder_str = example_folder.to_string_lossy().to_string();
+    log::info!("正在打开示例文件夹: {}", example_folder_str);
+
+    #[cfg(target_os = "windows")]
+    let folder_result = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new("explorer.exe")
+            .arg(&example_folder_str)
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let folder_result = Command::new("xdg-open")
+        .arg(&example_folder_str)
+        .spawn();
+
+    match folder_result {
+        Ok(_) => {
+            log::info!("已打开示例文件夹: {}", example_folder.display());
+        }
+        Err(e) => {
+            log::error!("打开示例文件夹失败: {}", e);
+            // 不返回错误，因为SteamTools已经启动了
+        }
+    }
+
+    Ok(json!({
+        "success": true,
+        "message": "SteamTools和示例文件夹已打开"
+    }))
+}
+
+/// 打开SteamTools
+/// 供用户手动启动SteamTools
+#[tauri::command]
+pub fn open_steamtools(app: AppHandle) -> Result<serde_json::Value, String> {
+    use std::process::Command;
+
+    // 获取资源目录
+    let resource_dir = get_resource_dir(&app)?;
+    let steamtools_exe = resource_dir.join("SteamTools").join("SteamTools.exe");
+
+    // 检查SteamTools是否存在
+    if !steamtools_exe.exists() {
+        return Err(format!("未找到SteamTools.exe，路径: {}", steamtools_exe.display()));
+    }
+
+    // 启动SteamTools
+    let steamtools_path_str = steamtools_exe.to_string_lossy().to_string();
+
+    #[cfg(target_os = "windows")]
+    let result = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new(&steamtools_path_str)
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let result = Command::new(&steamtools_path_str).spawn();
+
+    match result {
+        Ok(_) => {
+            log::info!("已启动SteamTools: {}", steamtools_exe.display());
+            Ok(json!({
+                "success": true,
+                "message": "SteamTools已启动"
+            }))
+        }
+        Err(e) => {
+            log::error!("启动SteamTools失败: {}", e);
+            Err(format!("启动SteamTools失败: {}", e))
+        }
+    }
+}
+
+/// 打开示例文件夹
+/// 供用户手动打开示例文件夹
+#[tauri::command]
+pub fn open_example_folder(app: AppHandle) -> Result<serde_json::Value, String> {
+    use std::process::Command;
+
+    // 获取资源目录
+    let resource_dir = get_resource_dir(&app)?;
+    let example_folder = resource_dir.join("第一次使用清单入库请将这个文件夹中的内容拖入_steamtools_的图标");
+
+    // 检查示例文件夹是否存在
+    if !example_folder.exists() {
+        return Err(format!("未找到示例文件夹，路径: {}", example_folder.display()));
+    }
+
+    // 打开示例文件夹
+    let example_folder_str = example_folder.to_string_lossy().to_string();
+
+    #[cfg(target_os = "windows")]
+    let result = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new("explorer.exe")
+            .arg(&example_folder_str)
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let result = Command::new("xdg-open")
+        .arg(&example_folder_str)
+        .spawn();
+
+    match result {
+        Ok(_) => {
+            log::info!("已打开示例文件夹: {}", example_folder.display());
+            Ok(json!({
+                "success": true,
+                "message": "示例文件夹已打开"
+            }))
+        }
+        Err(e) => {
+            log::error!("打开示例文件夹失败: {}", e);
+            Err(format!("打开示例文件夹失败: {}", e))
+        }
+    }
 }

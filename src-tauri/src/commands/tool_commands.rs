@@ -13,6 +13,20 @@ pub fn read_file_content(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("读取文件失败: {}", e))
 }
 
+/// 检查文件是否存在
+#[tauri::command]
+pub fn check_file_exists(path: String) -> Result<bool, String> {
+    let path_obj = Path::new(&path);
+    Ok(path_obj.exists() && path_obj.is_file())
+}
+
+/// 检查目录是否存在
+#[tauri::command]
+pub fn check_directory_exists(path: String) -> Result<bool, String> {
+    let path_obj = Path::new(&path);
+    Ok(path_obj.exists() && path_obj.is_dir())
+}
+
 /// 获取文件夹中的所有Lua文件
 #[tauri::command]
 pub fn get_lua_files_in_folder(folder: String) -> Result<Vec<String>, String> {

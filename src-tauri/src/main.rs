@@ -445,6 +445,8 @@ fn main() {
             window_commands::close_help_window,
             // 工具命令
             commands::tool_commands::read_file_content,
+            commands::tool_commands::check_file_exists,
+            commands::tool_commands::check_directory_exists,
             commands::tool_commands::get_lua_files_in_folder,
             commands::tool_commands::convert_lua_to_vdf,
             commands::tool_commands::get_vdf_files_in_folder,
@@ -577,6 +579,9 @@ fn main() {
             manifest_commands::restart_steam,
             manifest_commands::check_game_manifest_exists,
             manifest_commands::import_game_manifest_to_steam,
+            manifest_commands::setup_manifest_import_first_time,
+            manifest_commands::open_steamtools,
+            manifest_commands::open_example_folder,
         ])
         .run(tauri::generate_context!())
         .expect("应用程序启动失败");

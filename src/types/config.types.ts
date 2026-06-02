@@ -66,6 +66,8 @@ export interface LaunchConfig {
   hideToTrayOnClose: boolean
   /** 启动前检查游戏文件 */
   verifyBeforeLaunch: boolean
+  /** 清单入库功能是否已完成首次初始化 */
+  manifestImportInitialized: boolean
 }
 
 /**

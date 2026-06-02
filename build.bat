@@ -65,17 +65,6 @@ if errorlevel 1 (
     echo Copied: SteamToolPlus.exe
 )
 
-REM Copy resources directory if exists
-if exist "resources" (
-    if exist "PublicOut\resources" rmdir /s /q "PublicOut\resources"
-    xcopy /e /i /y "resources" "PublicOut\resources" >nul
-    if errorlevel 1 (
-        echo Warning: Failed to copy resources
-    ) else (
-        echo Copied: resources\
-    )
-)
-
 REM Create necessary directories
 if not exist "PublicOut\config" mkdir "PublicOut\config"
 

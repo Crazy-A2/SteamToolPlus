@@ -110,6 +110,8 @@ pub struct LaunchConfig {
     pub hide_to_tray_on_close: bool,
     /// 启动前检查游戏文件
     pub verify_before_launch: bool,
+    /// 清单入库功能是否已完成首次初始化
+    pub manifest_import_initialized: bool,
 }
 
 impl Default for LaunchConfig {
@@ -118,11 +120,14 @@ impl Default for LaunchConfig {
             start_minimized_to_tray: false,
             hide_to_tray_on_close: true,
             verify_before_launch: false,
+            manifest_import_initialized: false,
         }
     }
 }
 
 /// 更新配置请求
+/// 使用 Option 包装各个字段，允许部分更新
+/// 如果字段为 Some，则更新对应配置；如果为 None，则保持原值不变
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateConfigRequest {
@@ -134,4 +139,28 @@ pub struct UpdateConfigRequest {
     pub game_dirs: Option<GameDirConfig>,
     /// 启动配置更新
     pub launch: Option<LaunchConfig>,
+}
+
+/// 部分更新游戏目录配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PartialGameDirConfig {
+    /// Steam安装路径
+    pub steam_path: Option<String>,
+    /// 封面图存储路径
+    pub covers_path: Option<String>,
+}
+
+/// 部分更新启动配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PartialLaunchConfig {
+    /// 程序启动后最小化到托盘
+    pub start_minimized_to_tray: Option<bool>,
+    /// 关闭程序后隐藏在托盘（默认开启）
+    pub hide_to_tray_on_close: Option<bool>,
+    /// 启动前检查游戏文件
+    pub verify_before_launch: Option<bool>,
+    /// 清单入库功能是否已完成首次初始化
+    pub manifest_import_initialized: Option<bool>,
 }

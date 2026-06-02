@@ -6,7 +6,7 @@
         <h1 class="page-title">游戏本体下载</h1>
         <button
           class="manifest-link-btn"
-          @click="openExternalLink('https://pan.baidu.com/s/1FTZyknIObyzMuLAJC-Uj9g?pwd=8uwx')"
+          @click="openExternalLink('https://pan.baidu.com/s/1EMDn8l2d198Q6Lp3pVTzMQ?pwd=vtbe')"
         >
           <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>

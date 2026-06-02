@@ -130,7 +130,7 @@ const troubleshootingItems = ref<TroubleshootingItem[]>([
     question: '黑神话：悟空打不开',
     answer: [
       '1. 确保游戏放到纯英文路径',
-      '2. 实在不会操作去下 https://pan.baidu.com/s/1gSJt0jh8JTdUD_Eep0CMnQ?pwd=igqq 提取码: igqq 记得解压再双击 bat'
+      '2. 实在不会操作去下 https://pan.baidu.com/s/1w5Cm4OYT97g3kl1g6WPk5Q?pwd=vfub 提取码: vfub 记得解压再双击 bat'
     ],
     isExpanded: false
   },

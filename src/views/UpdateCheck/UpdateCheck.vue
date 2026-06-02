@@ -9,10 +9,14 @@
 
       <!-- 按钮区域 -->
       <div class="button-section">
+        <Button variant="primary" size="lg" @click="openQuarkLink">
+          查看夸克网盘
+        </Button>
+        <p class="extract-code">提取码：无</p>
         <Button variant="primary" size="lg" @click="openDownloadLink">
           查看百度网盘
         </Button>
-        <p class="extract-code">提取码：v1xm</p>
+        <p class="extract-code">提取码：vfub</p>
         <Button variant="primary" size="lg" @click="openXunleiLink">
           查看迅雷网盘
         </Button>
@@ -32,11 +36,22 @@ import { open } from '@tauri-apps/plugin-shell'
 import Button from '../../components/common/Button.vue'
 
 /**
+ * 打开夸克网盘下载链接
+ */
+async function openQuarkLink() {
+  try {
+    await open('https://pan.quark.cn/s/bc38612b683f')
+  } catch (error) {
+    // 打开链接失败时静默处理
+  }
+}
+
+/**
  * 打开百度网盘下载链接
  */
 async function openDownloadLink() {
   try {
-    await open('https://pan.baidu.com/s/1XbcZOLQcn4500z-SL1RDug?pwd=v1xm')
+    await open('https://pan.baidu.com/s/1w5Cm4OYT97g3kl1g6WPk5Q?pwd=vfub')
   } catch (error) {
     // 打开链接失败时静默处理
   }

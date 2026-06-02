@@ -159,7 +159,8 @@ async function saveSettings() {
       launch: {
         startMinimizedToTray: settings.value.startMinimizedToTray,
         hideToTrayOnClose: settings.value.hideToTrayOnClose,
-        verifyBeforeLaunch: currentConfig.launch.verifyBeforeLaunch || false
+        verifyBeforeLaunch: currentConfig.launch.verifyBeforeLaunch || false,
+        manifestImportInitialized: currentConfig.launch.manifestImportInitialized || false
       }
     }
 
