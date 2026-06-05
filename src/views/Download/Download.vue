@@ -928,7 +928,7 @@ const startSingleDownload = async () => {
     }>('start_game_download', {
       manifestPath: manifestPath.value,
       downloadPath: downloadPath.value,
-      gameId: gameId.value || 'unknown'
+      gameId: gameId.value
     })
 
     if (result.success) {
@@ -972,7 +972,7 @@ const startBatchDownload = async () => {
       }>('start_game_download', {
         manifestPath: game.path,
         downloadPath: gameDownloadPath,
-        gameId: game.id || 'unknown'
+        gameId: game.id
       })
 
       if (result.success) {
@@ -1055,7 +1055,9 @@ const parseProgressFileName = (fileName: string): { depotId: string; percentage:
  */
 const scanProgressFiles = async () => {
   try {
-    const progressFiles = await invoke<Array<{ name: string; path: string }>>('get_download_progress_files')
+    const progressFiles = await invoke<Array<{ name: string; path: string }>>('get_download_progress_files', {
+      gameId: gameId.value || undefined
+    })
     const updatedDepots = [...downloadProgress.value.depots]
 
     for (const file of progressFiles) {

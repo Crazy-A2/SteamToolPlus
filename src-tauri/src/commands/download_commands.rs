@@ -8,6 +8,8 @@ use tauri::AppHandle;
 use crate::services::game_data_service;
 use std::thread;
 use std::time::Duration;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
 /// 读取清单文件夹
 #[tauri::command]
@@ -53,11 +55,13 @@ pub async fn start_game_download(
     game_id: String,
 ) -> Result<crate::services::DownloadResult, String> {
     let service = DownloadService::new();
-    let result = service.start_game_download(&app, &manifest_path, &download_path);
+    let result = service.start_game_download(&app, &manifest_path, &download_path, &game_id);
 
     // 如果下载启动成功，启动监控任务
     if result.is_ok() {
         let app_handle = app.clone();
+        let manifest_path_clone = manifest_path.clone();
+        let download_path_clone = download_path.clone();
         let game_id_clone = game_id.clone();
 
         // 更新游戏状态为 downloading
@@ -68,44 +72,109 @@ pub async fn start_game_download(
             0,
         ).await;
 
-        // 启动后台监控任务
+        // 启动后台监控任务，支持自动续传
         thread::spawn(move || {
             log::info!("启动下载监控任务，游戏ID: {}", game_id_clone);
+            
+            // 重试计数器，最多重试3次
+            let retry_count = Arc::new(AtomicU32::new(0));
+            const MAX_RETRIES: u32 = 3;
 
-            // 持续监控直到 ddv20.exe 进程退出
+            // 持续监控直到下载完成或达到最大重试次数
             loop {
-                thread::sleep(Duration::from_secs(5));
+                // 等待 ddv20.exe 启动
+                thread::sleep(Duration::from_secs(3));
 
-                // 检查 ddv20.exe 是否还在运行
-                let is_running = crate::check_ddv20_running();
+                // 持续监控直到 ddv20.exe 进程退出
+                let mut ddv20_running = false;
+                loop {
+                    thread::sleep(Duration::from_secs(5));
+                    let is_running = crate::check_ddv20_running();
+                    if is_running {
+                        ddv20_running = true;
+                    } else if ddv20_running {
+                        // ddv20.exe 从运行状态变为退出状态
+                        break;
+                    }
+                }
 
-                if !is_running {
-                    // ddv20.exe 已退出，检查游戏状态
-                    let app_handle_clone = app_handle.clone();
-                    let game_id_check = game_id_clone.clone();
+                log::info!("检测到 ddv20.exe 进程已退出，游戏ID: {}", game_id_clone);
 
-                    // 使用 tokio 运行时执行异步操作
+                // 检查游戏是否全部下载完成
+                let app_check = app_handle.clone();
+                let game_id_check = game_id_clone.clone();
+                let is_completed = {
+                    let rt = tokio::runtime::Runtime::new();
+                    if let Ok(rt) = rt {
+                        rt.block_on(async {
+                            service.check_all_depots_completed(&app_check, &game_id_check).unwrap_or(false)
+                        })
+                    } else {
+                        false
+                    }
+                };
+
+                if is_completed {
+                    // 下载已完成，更新状态并退出监控
+                    let app_complete = app_handle.clone();
+                    let game_id_complete = game_id_clone.clone();
                     let rt = tokio::runtime::Runtime::new();
                     if let Ok(rt) = rt {
                         let _ = rt.block_on(async {
-                            // 检查游戏当前状态
-                            if let Ok(Some(game)) = game_data_service::get_game(app_handle_clone.clone(), game_id_check.clone()).await {
-                                // 如果状态是 downloading 且进度未到 100%，标记为 idle
-                                if game.download_status == "downloading" && game.download_progress < 100 {
+                            let _ = game_data_service::update_download_status(
+                                app_complete,
+                                game_id_complete,
+                                "completed".to_string(),
+                                100,
+                            ).await;
+                        });
+                    }
+                    log::info!("游戏 {} 所有 depot 下载完成", game_id_clone);
+                    break;
+                }
+
+                // 下载未完成，检查是否需要重试
+                let current_retry = retry_count.fetch_add(1, Ordering::SeqCst);
+                if current_retry >= MAX_RETRIES {
+                    // 达到最大重试次数，标记为错误状态
+                    let app_error = app_handle.clone();
+                    let game_id_error = game_id_clone.clone();
+                    let rt = tokio::runtime::Runtime::new();
+                    if let Ok(rt) = rt {
+                        let _ = rt.block_on(async {
+                            if let Ok(Some(game)) = game_data_service::get_game(app_error.clone(), game_id_error.clone()).await {
+                                if game.download_status == "downloading" {
                                     let _ = game_data_service::update_download_status(
-                                        app_handle_clone,
-                                        game_id_check,
-                                        "idle".to_string(),
+                                        app_error,
+                                        game_id_error,
+                                        "error".to_string(),
                                         game.download_progress,
                                     ).await;
-                                    log::info!("检测到 ddv20.exe 进程已退出，游戏 {} 下载状态已重置为 idle", game_id_clone);
                                 }
                             }
                         });
                     }
-
-                    // 退出监控循环
+                    log::warn!("游戏 {} 达到最大重试次数，标记为错误状态", game_id_clone);
                     break;
+                }
+
+                // 等待3秒后重新启动下载
+                log::info!("游戏 {} 将在3秒后自动续传 (重试 {}/{})", game_id_clone, current_retry + 1, MAX_RETRIES);
+                thread::sleep(Duration::from_secs(3));
+
+                // 重新启动 ddv20.exe 进行续传
+                let restart_result = service.start_game_download(
+                    &app_handle,
+                    &manifest_path_clone,
+                    &download_path_clone,
+                    &game_id_clone,
+                );
+
+                if let Err(e) = restart_result {
+                    log::error!("游戏 {} 续传启动失败: {}", game_id_clone, e);
+                    // 续传失败，继续循环会再次重试
+                } else {
+                    log::info!("游戏 {} 续传已启动", game_id_clone);
                 }
             }
 
@@ -117,10 +186,11 @@ pub async fn start_game_download(
 }
 
 /// 获取下载进度文件
+/// 可选传入 game_id，只获取该游戏的进度文件
 #[tauri::command]
-pub fn get_download_progress_files() -> Result<Vec<crate::services::ProgressFileInfo>, String> {
+pub fn get_download_progress_files(game_id: Option<String>) -> Result<Vec<crate::services::ProgressFileInfo>, String> {
     let service = DownloadService::new();
-    service.get_download_progress_files()
+    service.get_download_progress_files(game_id.as_deref())
 }
 
 /// 读取目录
@@ -153,10 +223,11 @@ pub fn get_game_depots(app: AppHandle, game_id: String) -> Result<Vec<String>, S
 
 /// 检查并清理已完成的下载
 /// 当游戏的所有 depot 都下载完成后，自动静默删除对应的进度 JSON 文件
+/// 可选传入 game_id，只清理该游戏的进度文件
 #[tauri::command]
-pub fn check_and_cleanup_completed_downloads(app: AppHandle) -> Result<(), String> {
+pub fn check_and_cleanup_completed_downloads(app: AppHandle, game_id: Option<String>) -> Result<(), String> {
     let service = DownloadService::new();
-    service.check_and_cleanup_completed_downloads(&app)
+    service.check_and_cleanup_completed_downloads(&app, game_id.as_deref())
 }
 
 /// 停止下载进程

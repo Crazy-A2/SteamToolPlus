@@ -2994,6 +2994,205 @@ pub fn open_external_link(url: String) -> Result<(), String> {
     Ok(())
 }
 
+// ============================================
+// ColdClientLoader 配置
+// ============================================
+
+/// 保存 ColdClientLoader 配置
+#[tauri::command]
+pub async fn save_coldclient_config(
+    game_path: String,
+    config: ColdClientLoaderConfig,
+) -> Result<ConfigSaveResult, String> {
+    use tokio::fs;
+    use tokio::io::AsyncWriteExt;
+
+    let steam_settings_dir = Path::new(&game_path).join("steam_settings");
+    fs::create_dir_all(&steam_settings_dir)
+        .await
+        .map_err(|e| format!("创建 steam_settings 目录失败: {}", e))?;
+
+    let config_path = steam_settings_dir.join("coldclientloader.ini");
+    let config_content = config.to_ini();
+
+    let mut file = fs::File::create(&config_path)
+        .await
+        .map_err(|e| format!("创建 coldclientloader.ini 失败: {}", e))?;
+    file.write_all(config_content.as_bytes())
+        .await
+        .map_err(|e| format!("写入 coldclientloader.ini 失败: {}", e))?;
+
+    Ok(ConfigSaveResult {
+        success: true,
+        message: "ColdClientLoader 配置已保存".to_string(),
+    })
+}
+
+/// 加载 ColdClientLoader 配置
+#[tauri::command]
+pub async fn load_coldclient_config(
+    game_path: String,
+) -> Result<ConfigLoadResult<ColdClientLoaderConfig>, String> {
+    use tokio::fs;
+
+    let config_path = Path::new(&game_path).join("steam_settings").join("coldclientloader.ini");
+
+    if !config_path.exists() {
+        return Ok(ConfigLoadResult {
+            exists: false,
+            config: None,
+        });
+    }
+
+    let content = fs::read_to_string(&config_path)
+        .await
+        .map_err(|e| format!("读取 coldclientloader.ini 失败: {}", e))?;
+
+    let config = parse_coldclient_ini(&content)?;
+
+    Ok(ConfigLoadResult {
+        exists: true,
+        config: Some(config),
+    })
+}
+
+fn parse_coldclient_ini(content: &str) -> Result<ColdClientLoaderConfig, String> {
+    let mut config = ColdClientLoaderConfig::default_config();
+    let mut current_section = String::new();
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        if line.starts_with('[') && line.ends_with(']') {
+            current_section = line[1..line.len()-1].to_string();
+            continue;
+        }
+
+        if let Some((key, value)) = line.split_once('=') {
+            let key = key.trim();
+            let value = value.trim();
+
+            match current_section.as_str() {
+                "loader" => {
+                    match key {
+                        "enabled" => config.enabled = value == "1",
+                        "injection_mode" => config.injection_mode = value.to_string(),
+                        "launch_args" => config.launch_args = value.to_string(),
+                        "exe_path" => config.exe_path = Some(value.to_string()),
+                        "working_dir" => config.working_dir = Some(value.to_string()),
+                        _ => {}
+                    }
+                }
+                "extra_dlls" => {
+                    if key.starts_with("dll") {
+                        config.extra_dlls.push(value.to_string());
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(config)
+}
+
+// ============================================
+// lobby_connect 配置
+// ============================================
+
+/// 保存 lobby_connect 配置
+#[tauri::command]
+pub async fn save_lobby_connect_config(
+    game_path: String,
+    config: LobbyConnectConfig,
+) -> Result<ConfigSaveResult, String> {
+    use tokio::fs;
+    use tokio::io::AsyncWriteExt;
+
+    let steam_settings_dir = Path::new(&game_path).join("steam_settings");
+    fs::create_dir_all(&steam_settings_dir)
+        .await
+        .map_err(|e| format!("创建 steam_settings 目录失败: {}", e))?;
+
+    let config_path = steam_settings_dir.join("lobby_connect.ini");
+    let config_content = config.to_ini();
+
+    let mut file = fs::File::create(&config_path)
+        .await
+        .map_err(|e| format!("创建 lobby_connect.ini 失败: {}", e))?;
+    file.write_all(config_content.as_bytes())
+        .await
+        .map_err(|e| format!("写入 lobby_connect.ini 失败: {}", e))?;
+
+    Ok(ConfigSaveResult {
+        success: true,
+        message: "lobby_connect 配置已保存".to_string(),
+    })
+}
+
+/// 加载 lobby_connect 配置
+#[tauri::command]
+pub async fn load_lobby_connect_config(
+    game_path: String,
+) -> Result<ConfigLoadResult<LobbyConnectConfig>, String> {
+    use tokio::fs;
+
+    let config_path = Path::new(&game_path).join("steam_settings").join("lobby_connect.ini");
+
+    if !config_path.exists() {
+        return Ok(ConfigLoadResult {
+            exists: false,
+            config: None,
+        });
+    }
+
+    let content = fs::read_to_string(&config_path)
+        .await
+        .map_err(|e| format!("读取 lobby_connect.ini 失败: {}", e))?;
+
+    let config = parse_lobby_connect_ini(&content)?;
+
+    Ok(ConfigLoadResult {
+        exists: true,
+        config: Some(config),
+    })
+}
+
+fn parse_lobby_connect_ini(content: &str) -> Result<LobbyConnectConfig, String> {
+    let mut config = LobbyConnectConfig::default_config();
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        if line.starts_with('[') && line.ends_with(']') {
+            continue;
+        }
+
+        if let Some((key, value)) = line.split_once('=') {
+            let key = key.trim();
+            let value = value.trim();
+
+            match key {
+                "enabled" => config.enabled = value == "1",
+                "auto_join" => config.auto_join = value == "1",
+                "target_lobby_id" => config.target_lobby_id = value.to_string(),
+                "password" => config.password = value.to_string(),
+                "auto_reconnect" => config.auto_reconnect = value == "1",
+                "reconnect_interval" => config.reconnect_interval = value.parse().unwrap_or(5),
+                _ => {}
+            }
+        }
+    }
+
+    Ok(config)
+}
+
 /// 写入文本文件
 #[tauri::command]
 pub async fn write_text_file(path: String, content: String) -> Result<(), String> {

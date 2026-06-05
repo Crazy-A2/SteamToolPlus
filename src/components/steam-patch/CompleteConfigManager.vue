@@ -788,6 +788,8 @@ async function saveAllConfigs() {
       invoke('save_mods_config', { gamePath: props.gamePath, config: configs.mods }),
       invoke('save_leaderboards_config', { gamePath: props.gamePath, config: configs.leaderboards }),
       invoke('save_controller_config', { gamePath: props.gamePath, config: configs.controller }),
+      invoke('save_coldclient_config', { gamePath: props.gamePath, config: configs.coldClientLoader }),
+      invoke('save_lobby_connect_config', { gamePath: props.gamePath, config: configs.lobbyConnect }),
     ]
     await Promise.all(promises)
     emit('saved')
@@ -809,9 +811,11 @@ async function loadAllConfigs() {
     invoke<{ exists: boolean; config?: ModsConfig }>('load_mods_config', { gamePath: props.gamePath }),
     invoke<{ exists: boolean; config?: LeaderboardsConfig }>('load_leaderboards_config', { gamePath: props.gamePath }),
     invoke<{ exists: boolean; config?: ControllerConfig }>('load_controller_config', { gamePath: props.gamePath }),
+    invoke<{ exists: boolean; config?: ColdClientLoaderConfig }>('load_coldclient_config', { gamePath: props.gamePath }),
+    invoke<{ exists: boolean; config?: LobbyConnectConfig }>('load_lobby_connect_config', { gamePath: props.gamePath }),
   ])
 
-  const [main, user, overlay, achievements, stats, items, mods, leaderboards, controller] = results
+  const [main, user, overlay, achievements, stats, items, mods, leaderboards, controller, coldclient, lobbyconnect] = results
 
   if (main.exists && main.config) Object.assign(configs.main, main.config)
   if (user.exists && user.config) Object.assign(configs.user, user.config)
@@ -822,6 +826,8 @@ async function loadAllConfigs() {
   if (mods.exists && mods.config) Object.assign(configs.mods, mods.config)
   if (leaderboards.exists && leaderboards.config) Object.assign(configs.leaderboards, leaderboards.config)
   if (controller.exists && controller.config) Object.assign(configs.controller, controller.config)
+  if (coldclient.exists && coldclient.config) Object.assign(configs.coldClientLoader, coldclient.config)
+  if (lobbyconnect.exists && lobbyconnect.config) Object.assign(configs.lobbyConnect, lobbyconnect.config)
 
   // 更新配置状态
   configStatus.value = {
@@ -834,6 +840,8 @@ async function loadAllConfigs() {
     mods: mods.exists,
     leaderboards: leaderboards.exists,
     controller: controller.exists,
+    coldclient: coldclient.exists,
+    lobbyconnect: lobbyconnect.exists,
   }
 }
 

@@ -120,6 +120,22 @@
               <p>下载路径: {{ existingGameData.download_path }}</p>
               <p>安装路径: {{ existingGameData.install_path }}</p>
             </div>
+            <!-- 验证完整性按钮 -->
+            <button
+              class="verify-integrity-btn"
+              :class="{ loading: isVerifying }"
+              :disabled="isVerifying"
+              @click="verifyIntegrity"
+            >
+              <svg v-if="isVerifying" class="loading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              {{ isVerifying ? '验证中...' : '验证完整性' }}
+            </button>
           </div>
 
           <div v-else class="download-info">
@@ -581,6 +597,7 @@ const patchLocalStatus = ref<Map<number, boolean>>(new Map())
 
 // 下载状态
 const isDownloading = ref(false)
+const isVerifying = ref(false)
 const downloadLogs = ref<{ time: string; message: string; type: 'info' | 'success' | 'error' | 'warning' }[]>([])
 
 // 下载进度监控
@@ -879,7 +896,7 @@ const startDownload = async () => {
     }>('start_game_download', {
       manifestPath: manifestFolderPath.value,
       downloadPath: downloadPath.value,
-      gameId: gameId.value || 'unknown'
+      gameId: gameId.value
     })
 
     if (result.success) {
@@ -955,12 +972,62 @@ const getTotalDepots = async (): Promise<number> => {
 }
 
 /**
+ * 验证游戏完整性
+ * 使用与下载相同的参数重新运行 ddv20.exe，验证并补全缺失文件
+ */
+const verifyIntegrity = async () => {
+  if (!manifestFolderPath.value) {
+    alert('未找到清单文件夹')
+    return
+  }
+
+  if (!existingGameData.value?.download_path) {
+    alert('未找到下载路径')
+    return
+  }
+
+  isVerifying.value = true
+  downloadLogs.value = []
+  addDownloadLog('开始验证游戏完整性...', 'info')
+  addDownloadLog(`游戏: ${game.value?.game_name || gameId.value}`, 'info')
+  addDownloadLog(`清单路径: ${manifestFolderPath.value}`, 'info')
+  addDownloadLog(`下载路径: ${existingGameData.value.download_path}`, 'info')
+
+  try {
+    // 调用与下载相同的命令，ddv20.exe 会自动验证并补全
+    const result = await invoke<{
+      success: boolean
+      message: string
+    }>('start_game_download', {
+      manifestPath: manifestFolderPath.value,
+      downloadPath: existingGameData.value.download_path,
+      gameId: gameId.value
+    })
+
+    if (result.success) {
+      addDownloadLog('验证命令已启动', 'success')
+      addDownloadLog(result.message, 'info')
+      // 启动进度监控
+      startProgressMonitoring()
+    } else {
+      addDownloadLog(`验证启动失败: ${result.message}`, 'error')
+    }
+  } catch (error) {
+    addDownloadLog(`验证出错: ${error}`, 'error')
+  } finally {
+    isVerifying.value = false
+  }
+}
+
+/**
  * 扫描进度文件
  */
 const scanProgressFiles = async () => {
   try {
-    // 获取程序根目录下的进度文件
-    const progressFiles = await invoke<Array<{ name: string; path: string }>>('get_download_progress_files')
+    // 获取指定游戏的进度文件
+    const progressFiles = await invoke<Array<{ name: string; path: string }>>('get_download_progress_files', {
+      gameId: gameId.value
+    })
 
     // 更新每个depot的进度
     const updatedDepots = [...downloadProgress.value.depots]
@@ -1861,6 +1928,37 @@ const restartSteam = async () => {
   margin: 0 0 4px 0;
   font-size: 13px;
   color: var(--steam-text-secondary);
+}
+
+/* 验证完整性按钮 */
+.verify-integrity-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background-color: var(--steam-button-primary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: auto;
+}
+
+.verify-integrity-btn:hover {
+  background-color: var(--steam-button-primary-hover);
+}
+
+.verify-integrity-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.verify-integrity-btn svg {
+  width: 18px;
+  height: 18px;
 }
 
 .download-info {

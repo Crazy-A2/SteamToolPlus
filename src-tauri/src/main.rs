@@ -541,6 +541,11 @@ fn main() {
             patch_commands::save_steam_http_response,
             patch_commands::load_steam_http_response,
             patch_commands::list_steam_http_configs,
+            // ColdClientLoader 和 lobby_connect 配置命令
+            patch_commands::save_coldclient_config,
+            patch_commands::load_coldclient_config,
+            patch_commands::save_lobby_connect_config,
+            patch_commands::load_lobby_connect_config,
             // 游戏数据管理命令
             game_data_commands::get_all_games_data,
             game_data_commands::get_game_data,

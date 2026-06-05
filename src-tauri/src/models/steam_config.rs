@@ -854,7 +854,140 @@ impl Default for ControllerConfig {
 }
 
 // ============================================
-// 8. 完整配置集合（简化版）
+// 8. ColdClientLoader 配置
+// ============================================
+
+/// ColdClientLoader 配置文件 (coldclientloader.ini)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColdClientLoaderConfig {
+    pub enabled: bool,
+    /// 注入模式: "direct" (直接注入) 或 "launcher" (启动器模式)
+    #[serde(rename = "injectionMode")]
+    pub injection_mode: String,
+    /// 额外 DLL 列表
+    #[serde(rename = "extraDlls")]
+    pub extra_dlls: Vec<String>,
+    /// 游戏启动参数
+    #[serde(rename = "launchArgs")]
+    pub launch_args: String,
+    /// 游戏主程序路径
+    #[serde(rename = "exePath")]
+    pub exe_path: Option<String>,
+    /// 工作目录
+    #[serde(rename = "workingDir")]
+    pub working_dir: Option<String>,
+}
+
+impl Default for ColdClientLoaderConfig {
+    fn default() -> Self {
+        Self::default_config()
+    }
+}
+
+impl ColdClientLoaderConfig {
+    pub fn default_config() -> Self {
+        Self {
+            enabled: false,
+            injection_mode: "direct".to_string(),
+            extra_dlls: vec![],
+            launch_args: String::new(),
+            exe_path: None,
+            working_dir: None,
+        }
+    }
+
+    /// 序列化为 INI 格式
+    pub fn to_ini(&self) -> String {
+        let mut result = String::new();
+        result.push_str("[loader]\n");
+        result.push_str(&format!("enabled = {}\n", self.enabled as i32));
+        result.push_str(&format!("injection_mode = {}\n", self.injection_mode));
+        result.push_str(&format!("launch_args = {}\n", self.launch_args));
+        
+        if let Some(ref path) = self.exe_path {
+            result.push_str(&format!("exe_path = {}\n", path));
+        }
+        
+        if let Some(ref dir) = self.working_dir {
+            result.push_str(&format!("working_dir = {}\n", dir));
+        }
+        
+        if !self.extra_dlls.is_empty() {
+            result.push_str("\n[extra_dlls]\n");
+            for (i, dll) in self.extra_dlls.iter().enumerate() {
+                result.push_str(&format!("dll{} = {}\n", i + 1, dll));
+            }
+        }
+        
+        result
+    }
+}
+
+// ============================================
+// 9. lobby_connect 配置
+// ============================================
+
+/// lobby_connect 配置文件 (lobby_connect.ini)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LobbyConnectConfig {
+    pub enabled: bool,
+    /// 自动加入大厅
+    #[serde(rename = "autoJoin")]
+    pub auto_join: bool,
+    /// 目标大厅 ID
+    #[serde(rename = "targetLobbyId")]
+    pub target_lobby_id: String,
+    /// 大厅密码
+    pub password: String,
+    /// 自动重连
+    #[serde(rename = "autoReconnect")]
+    pub auto_reconnect: bool,
+    /// 重连间隔(秒)
+    #[serde(rename = "reconnectInterval")]
+    pub reconnect_interval: i32,
+}
+
+impl Default for LobbyConnectConfig {
+    fn default() -> Self {
+        Self::default_config()
+    }
+}
+
+impl LobbyConnectConfig {
+    pub fn default_config() -> Self {
+        Self {
+            enabled: false,
+            auto_join: false,
+            target_lobby_id: String::new(),
+            password: String::new(),
+            auto_reconnect: false,
+            reconnect_interval: 5,
+        }
+    }
+
+    /// 序列化为 INI 格式
+    pub fn to_ini(&self) -> String {
+        format!(
+            r#"[lobby_connect]
+enabled = {}
+auto_join = {}
+target_lobby_id = {}
+password = {}
+auto_reconnect = {}
+reconnect_interval = {}
+"#,
+            self.enabled as i32,
+            self.auto_join as i32,
+            self.target_lobby_id,
+            self.password,
+            self.auto_reconnect as i32,
+            self.reconnect_interval
+        )
+    }
+}
+
+// ============================================
+// 10. 完整配置集合（简化版）
 // ============================================
 
 /// 完整的Steam设置配置
@@ -871,6 +1004,8 @@ pub struct CompleteSteamSettings {
     pub mods: ModsConfig,
     pub leaderboards: LeaderboardsConfig,
     pub controller: ControllerConfig,
+    pub cold_client_loader: ColdClientLoaderConfig,
+    pub lobby_connect: LobbyConnectConfig,
 }
 
 impl CompleteSteamSettings {
@@ -887,6 +1022,8 @@ impl CompleteSteamSettings {
             mods: ModsConfig::default_config(),
             leaderboards: LeaderboardsConfig::default_config(),
             controller: ControllerConfig::default(),
+            cold_client_loader: ColdClientLoaderConfig::default_config(),
+            lobby_connect: LobbyConnectConfig::default_config(),
         }
     }
 }
